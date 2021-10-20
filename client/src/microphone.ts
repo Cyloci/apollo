@@ -4,7 +4,7 @@ interface MicrophoneState {
   recording: boolean;
 }
 
-const useMicrophone = (bufferCallback: (b: AudioBuffer) => void) => {
+const useMicrophone = (blobCallback: (b: Blob) => void) => {
   const audioContext = new AudioContext();
 
   const [mediaStream, setMediaStream] = React.useState<MediaStream | undefined>(
@@ -33,7 +33,7 @@ const useMicrophone = (bufferCallback: (b: AudioBuffer) => void) => {
     console.log("stopped");
     const blob = new Blob(chunks, { type: "audio/ogg; codecs=opus" });
     chunks = [];
-    audioContext.decodeAudioData(await blob.arrayBuffer()).then(bufferCallback);
+    blobCallback(blob);
   };
 
   const getMediaRecorder = () => {

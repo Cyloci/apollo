@@ -1,11 +1,12 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import useMicrophone from "./microphone";
+import getBlobDuration from "get-blob-duration";
 const util = require("audio-buffer-utils");
 
-const NUM_BEATS_IN_LOOP = 16;
-const MAX_TRACK_WIDTH = 800;
 const BPM = 100;
-const LOOP_DURATION = (NUM_BEATS_IN_LOOP / BPM) * 60;
+const NUM_BEATS_IN_LOOP = 16;
+const MAX_TRACK_WIDTH_PIXELS = 800;
+const LOOP_DURATION_SECONDS = (NUM_BEATS_IN_LOOP / BPM) * 60;
 
 interface Track {
   x: number;
@@ -34,22 +35,44 @@ const App = () => {
 
   const audioContext = new AudioContext();
 
-  const addBuffer = (buffer: AudioBuffer) =>
+  const [ws] = useState(new WebSocket("ws://localhost:8080"));
+
+  ws.onmessage = (event: MessageEvent) => {
+    console.log("recieved", event.data);
+    const blob = event.data as Blob;
+    addBlob(blob);
+  };
+
+  const broadcastBlob = async (blob: Blob) => {
+    ws.send(blob);
+    addBlob(blob);
+  };
+
+  const addBlob = async (blob: Blob) => {
+    const duration = await getBlobDuration(blob);
+    const buffer = await audioContext.decodeAudioData(await blob.arrayBuffer());
     setState((state) => ({
       ...state,
       tracks: [
         ...state.tracks,
         {
           x: 0,
-          width: 800,
+          width: (duration / LOOP_DURATION_SECONDS) * MAX_TRACK_WIDTH_PIXELS,
           dragging: false,
           originX: 0,
           buffer,
         },
       ],
     }));
+  };
 
-  const { toggleRecording, isRecording } = useMicrophone(addBuffer);
+  useEffect(() => {
+    return () => {
+      ws.close();
+    };
+  }, [ws]);
+
+  const { toggleRecording, isRecording } = useMicrophone(broadcastBlob);
 
   const onMouseDownTrack = (index: number) => (
     e: React.MouseEvent<SVGRectElement>
@@ -84,7 +107,7 @@ const App = () => {
               ...t,
               x: Math.min(
                 Math.max(0, t.x - (t.originX - (e.clientX - left))),
-                MAX_TRACK_WIDTH - t.width
+                MAX_TRACK_WIDTH_PIXELS - t.width
               ),
             }
       ),
@@ -184,7 +207,7 @@ const App = () => {
             />
           </pattern>
         </defs>
-        <rect width={MAX_TRACK_WIDTH} height="100%" fill="url(#grid)" />
+        <rect width={MAX_TRACK_WIDTH_PIXELS} height="100%" fill="url(#grid)" />
         <g className="tracks">
           {state.tracks.map((track, i) => {
             return (
